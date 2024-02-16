@@ -3,6 +3,7 @@ import random
 from datetime import datetime
 from flask import Flask, g
 from functools import wraps
+import sqlite3
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -68,9 +69,23 @@ def page_not_found(e):
 # def login():
 #   ...
 
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
+    user = new_user()
+    return {'id': user['id'], 'name': user['name'], 'api_key': user['api_key'], 'password': user['password']}
 
 # @app.route('/api/login')
 # def login():
 #   ... 
 
-# ... etc
+@app.route('/api/login', methods=['GET', 'POST'])
+def api_login():
+    if request.method == 'POST':
+        username = request.json.get('username')
+        password = request.json.get('password')
+        user = query_db('SELECT * FROM users WHERE name = ? AND password = ?', [username, password], one=True)
+        if user:
+            return {'api_key': user['api_key']}
+        else:
+            return {'error': 'Invalid credentials'}, 401
+
