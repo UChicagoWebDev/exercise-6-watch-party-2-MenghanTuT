@@ -45,12 +45,90 @@ document.addEventListener('DOMContentLoaded', () => {
   load_page();
 });
 
+// show correct LOGIN
 const loginButton = document.querySelector('.alignedForm.login button');
 loginButton.addEventListener('click', async (event) => {
   event.preventDefault();
   const username = document.querySelector('.login input[name="username"]').value;
   const password = document.querySelector('.login input[name="password"]').value;
   await login(username, password);
+});
+
+const createNewAccount = document.querySelector('.login .failed button');
+createNewAccount.addEventListener('click',() => {
+  signup();
+    // debug
+    console.log("action: sign up")
+});
+
+// show correct SPLASH
+document.querySelector('.create').addEventListener('click', () => { 
+  createanewroom();
+});
+document.querySelector('.loggedIn').addEventListener('click', () => {
+  navigateTo("/profile");
+});
+document.querySelector('.loggedOut a').addEventListener('click', () => {
+  localStorage.setItem('loginfailedornot', "success");
+  navigateTo("/login");
+});
+document.querySelector('.signup').addEventListener('click', async () => {
+  signup();
+  // debug
+  console.log("action: sign up")
+});
+
+// show correct ROOM
+const editIcon = document.querySelector('.displayRoomName .material-symbols-outlined');
+const displayRoomNameDiv = document.querySelector('.displayRoomName');
+const editRoomNameDiv = document.querySelector('.editRoomName');
+editIcon.addEventListener('click', () => {
+    displayRoomNameDiv.style.display = 'none';
+    editRoomNameDiv.style.display = 'block';
+});
+
+const roomNameElement = document.querySelector('.displayRoomName strong');
+const updateroomname = document.querySelector('.editRoomName button');
+updateroomname.addEventListener('click',async () => {
+  const room = await FetchRoomName();
+  roomnameinput = document.querySelector('.editRoomName input').value;
+  await updateRoomName(room.id, roomnameinput);
+  displayRoomNameDiv.style.display = 'block';
+  editRoomNameDiv.style.display = 'none';
+  const newRoomDetail = await FetchRoomName();
+  roomNameElement.textContent = newRoomDetail.name;
+});
+
+const profilelink = document.querySelector('.room .welcomeBack');
+profilelink.addEventListener('click',() => {
+  navigateTo("/profile");
+});
+
+const postbutton = document.querySelector('.room .comment_box button');
+postbutton.addEventListener('click',() => {
+  sendPost();
+});
+
+// show correct PROFILE
+document.querySelector('.goToSplash').addEventListener('click', () => {
+  navigateTo('/');
+});
+
+document.querySelector('.logout').addEventListener('click', () => {
+  // Removing items from localStorage
+  localStorage.clear();
+  navigateTo('/');
+});
+
+const updateUsernameButton = document.querySelector('input[name="username"] + button');
+const updatePasswordButton = document.querySelector('input[type="password"] + button');
+updateUsernameButton.addEventListener('click', () => {
+  console.log("updateUsername();");
+  UpdateUsername()
+});
+updatePasswordButton.addEventListener('click', () => {
+  console.log("updatePassword();");
+  updatePassword()
 });
 
 //page rendering
@@ -107,41 +185,12 @@ async function showcorrectroom(){
   const roomNameElement = document.querySelector('.displayRoomName strong');
   roomNameElement.textContent = room.name;
 
-  const editIcon = document.querySelector('.displayRoomName .material-symbols-outlined');
-  const updateroomname = document.querySelector('.editRoomName button');
-
-  const displayRoomNameDiv = document.querySelector('.displayRoomName');
   const editRoomNameDiv = document.querySelector('.editRoomName');
   editRoomNameDiv.style.display = 'none';
-
-  editIcon.addEventListener('click', () => {
-      displayRoomNameDiv.style.display = 'none';
-      editRoomNameDiv.style.display = 'block';
-  });
-  updateroomname.addEventListener('click',async () => {
-    roomnameinput = document.querySelector('.editRoomName input').value;
-    await updateRoomName(room.id, roomnameinput);
-    displayRoomNameDiv.style.display = 'block';
-    editRoomNameDiv.style.display = 'none';
-    const newRoomDetail = await FetchRoomName();
-    roomNameElement.textContent = newRoomDetail.name;
-  });
 
   const roomIdElement = document.querySelector('.roomDetail .roomlink');
   roomIdElement.textContent = `/room/${room.id}`;
   roomIdElement.href = `/room/${room.id}`;
-
-  const profilelink = document.querySelector('.room .welcomeBack');
-  profilelink.addEventListener('click',() => {
-    navigateTo("/profile");
-  });
-
-  const postbutton = document.querySelector('.room .comment_box button');
-  postbutton.addEventListener('click',() => {
-    sendPost();
-  });
-
-
 }
 
 function showcorrectlogin(){
@@ -150,13 +199,6 @@ function showcorrectlogin(){
   if (loginfailed == "failed"){
     document.querySelector('.failed').style.display = 'block';
   }
-
-  const createNewAccount = document.querySelector('.login .failed button');
-  createNewAccount.addEventListener('click',() => {
-    signup();
-      // debug
-      console.log("action: sign up")
-  });
 }
 
 function showcorrectprofile(){
@@ -170,32 +212,6 @@ function showcorrectprofile(){
   if (usernameInput) usernameInput.value = username;
   if (passwordInput) passwordInput.value = password;
   if (repeatPasswordInput) repeatPasswordInput.value = password;
-
-  document.querySelector('.goToSplash').addEventListener('click', (event) => {
-    event.preventDefault();
-    navigateTo('/');
-  });
-
-  document.querySelector('.logout').addEventListener('click', (event) => {
-    event.preventDefault();
-    // Removing items from localStorage
-    localStorage.clear();
-    navigateTo('/');
-  });
-
-  const updateUsernameButton = document.querySelector('input[name="username"] + button');
-  const updatePasswordButton = document.querySelector('input[type="password"] + button');
-  updateUsernameButton.addEventListener('click', (event) => {
-    // event.preventDefault();
-    console.log("updateUsername();");
-    UpdateUsername()
-  });
-  updatePasswordButton.addEventListener('click', (event) => {
-    // event.preventDefault();
-    console.log("updatePassword();");
-    updatePassword()
-  });
-
 }
 
 function showcorrectSPLASH(apikey)
@@ -215,28 +231,10 @@ function showcorrectSPLASH(apikey)
     // User is logged in
     LOGGEDIN.style.display = 'block';
     CREATE_BUTTON.style.display = 'block';
-    document.querySelector('.create').addEventListener('click', (event) => {
-      event.preventDefault(); 
-      createanewroom();
-    });
-    document.querySelector('.loggedIn').addEventListener('click', () => {
-      navigateTo("/profile");
-    });
   } else {
     // No apikey, user is logged out
     LOGGEDOUT.style.display = 'block';
-    document.querySelector('.loggedOut a').addEventListener('click', (event) => {
-      event.preventDefault(); 
-      localStorage.setItem('loginfailedornot', "success");
-      navigateTo("/login");
-    });
     SIGNUP_BUTTON.style.display = 'block';
-    document.querySelector('.signup').addEventListener('click', async (event) => {
-      event.preventDefault();
-      signup();
-      // debug
-      console.log("action: sign up")
-    });
   }
 }
 
