@@ -37,8 +37,11 @@ repeatPasswordField.addEventListener("input", checkPasswordRepeat);
 //          login successfully, send them to their original destination
 //        - Hide all other pages
 
+let roomlistPollingInterval = null
+let messagePollingInterval = null
+
 document.addEventListener('DOMContentLoaded', () => {
-  localStorage.clear();
+  // localStorage.clear();
   load_page();
 });
 
@@ -50,49 +53,40 @@ loginButton.addEventListener('click', async (event) => {
   await login(username, password);
 });
 
+//page rendering
 function load_page(){
   updateContentPlaceholdersUsername();
+  clearInterval(roomlistPollingInterval)
+  clearInterval(messagePollingInterval)
   const apiKey = localStorage.getItem('apiKey');
   const path = window.location.pathname;
 
 // debug
 if (!apiKey){console.log("pageload: not found apiKey")} else{console.log("pageload:", apiKey)}
-
   if (!apiKey) {
     if (path === '/login') {
       showPage(LOGIN);
-      loginfailedornot();
+      showcorrectlogin();
     } else {
       showPage(SPLASH);
+      FetchAndUpdateRooms();
       showcorrectSPLASH(apiKey);
     }
   } else {
-    if (path === '/profile') {
+    if (path == '/profile') {
       showPage(PROFILE);
       showcorrectprofile();
     } else if (path.startsWith('/room')) {
+      startMessagePolling();
       showPage(ROOM);
+      showcorrectroom();
     } else {
+      startRoomlistPolling();
+      FetchAndUpdateRooms();
       showPage(SPLASH);
       showcorrectSPLASH(apiKey);
     }
   }
-}
-
-function showcorrectprofile(){
-  const username = localStorage.getItem('username');
-  // const password = localStorage.getItem('password');
-  
-  // Select the input elements by their name attribute
-  const usernameInput = document.querySelector('input[name="username"]');
-  // const passwordInput = document.querySelector('input[name="password"]');
-  // const repeatPasswordInput = document.querySelector('input[name="repeatPassword"]');
-
-  // Update the value of the input elements
-  if (usernameInput) usernameInput.value = username;
-  // It's generally unsafe to prefill password fields for display or update purposes
-  // if (passwordInput) passwordInput.value = password;
-  // if (repeatPasswordInput) repeatPasswordInput.value = password;
 }
 
 function hideAllPages() {
@@ -107,9 +101,105 @@ function showPage(page) {
   page.style.display = 'block';
 }
 
+async function showcorrectroom(){
+  FetchAndUpdateMessages();
+  const room = await FetchRoomName();
+  const roomNameElement = document.querySelector('.displayRoomName strong');
+  roomNameElement.textContent = room.name;
+
+  const editIcon = document.querySelector('.displayRoomName .material-symbols-outlined');
+  const updateroomname = document.querySelector('.editRoomName button');
+
+  const displayRoomNameDiv = document.querySelector('.displayRoomName');
+  const editRoomNameDiv = document.querySelector('.editRoomName');
+  editRoomNameDiv.style.display = 'none';
+
+  editIcon.addEventListener('click', () => {
+      displayRoomNameDiv.style.display = 'none';
+      editRoomNameDiv.style.display = 'block';
+  });
+  updateroomname.addEventListener('click',async () => {
+    roomnameinput = document.querySelector('.editRoomName input').value;
+    await updateRoomName(room.id, roomnameinput);
+    displayRoomNameDiv.style.display = 'block';
+    editRoomNameDiv.style.display = 'none';
+    const newRoomDetail = await FetchRoomName();
+    roomNameElement.textContent = newRoomDetail.name;
+  });
+
+  const roomIdElement = document.querySelector('.roomDetail .roomlink');
+  roomIdElement.textContent = `/room/${room.id}`;
+  roomIdElement.href = `/room/${room.id}`;
+
+  const profilelink = document.querySelector('.room .welcomeBack');
+  profilelink.addEventListener('click',() => {
+    navigateTo("/profile");
+  });
+
+  const postbutton = document.querySelector('.room .comment_box button');
+  postbutton.addEventListener('click',() => {
+    sendPost();
+  });
+
+
+}
+
+function showcorrectlogin(){
+  document.querySelector('.failed').style.display = 'none';
+  const loginfailed = localStorage.getItem('loginfailedornot');
+  if (loginfailed == "failed"){
+    document.querySelector('.failed').style.display = 'block';
+  }
+
+  const createNewAccount = document.querySelector('.login .failed button');
+  createNewAccount.addEventListener('click',() => {
+    signup();
+      // debug
+      console.log("action: sign up")
+  });
+}
+
+function showcorrectprofile(){
+  const username = localStorage.getItem('username');
+  const password = localStorage.getItem('password');
+
+  const usernameInput = document.querySelector('input[name="username"]');
+  const passwordInput = document.querySelector('input[name="password"]');
+  const repeatPasswordInput = document.querySelector('input[name="repeatPassword"]');
+
+  if (usernameInput) usernameInput.value = username;
+  if (passwordInput) passwordInput.value = password;
+  if (repeatPasswordInput) repeatPasswordInput.value = password;
+
+  document.querySelector('.goToSplash').addEventListener('click', (event) => {
+    event.preventDefault();
+    navigateTo('/');
+  });
+
+  document.querySelector('.logout').addEventListener('click', (event) => {
+    event.preventDefault();
+    // Removing items from localStorage
+    localStorage.clear();
+    navigateTo('/');
+  });
+
+  const updateUsernameButton = document.querySelector('input[name="username"] + button');
+  const updatePasswordButton = document.querySelector('input[type="password"] + button');
+  updateUsernameButton.addEventListener('click', (event) => {
+    // event.preventDefault();
+    console.log("updateUsername();");
+    UpdateUsername()
+  });
+  updatePasswordButton.addEventListener('click', (event) => {
+    // event.preventDefault();
+    console.log("updatePassword();");
+    updatePassword()
+  });
+
+}
+
 function showcorrectSPLASH(apikey)
 {
-  console.log(apikey)
   const LOGGEDIN = document.querySelector(".loggedIn"); // for logged-in users
   const LOGGEDOUT = document.querySelector(".loggedOut"); // for logged-out users
   const CREATE_BUTTON = document.querySelector(".create"); // for logged-in users
@@ -121,13 +211,16 @@ function showcorrectSPLASH(apikey)
   CREATE_BUTTON.style.display = 'none';
   SIGNUP_BUTTON.style.display = 'none'; 
 
-  if(apikey!= null) {
+  if(apikey) {
     // User is logged in
     LOGGEDIN.style.display = 'block';
     CREATE_BUTTON.style.display = 'block';
     document.querySelector('.create').addEventListener('click', (event) => {
       event.preventDefault(); 
       createanewroom();
+    });
+    document.querySelector('.loggedIn').addEventListener('click', () => {
+      navigateTo("/profile");
     });
   } else {
     // No apikey, user is logged out
@@ -147,6 +240,59 @@ function showcorrectSPLASH(apikey)
   }
 }
 
+//action
+async function UpdateUsername(){
+  const usernameInput = document.querySelector('input[name="username"]');
+  const apiKey = localStorage.getItem('apiKey');
+  console.log(apiKey)
+  try {
+      const response = await fetch('/api/username', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `${apiKey}` 
+          },
+          body: JSON.stringify({ username: usernameInput.value })
+      });
+      if (!response.ok) throw new Error('Failed to update username');
+      alert('Username updated successfully');
+      await localStorage.setItem('username', usernameInput.value);
+      updateContentPlaceholdersUsername()
+      // username = localStorage.getItem('username')
+      // document.querySelector('.profile .username').textContent = username
+  } catch (error) {
+      console.error('Error updating username:', error);
+  }
+}
+
+async function updatePassword() {
+  const passwordInput = document.querySelector('input[name="password"]');
+  const repeatPasswordInput = document.querySelector('input[name="repeatPassword"]');
+  const apiKey = localStorage.getItem('apiKey');
+  if (passwordInput.value !== repeatPasswordInput.value) {
+        alert('Passwords do not match');
+      return;
+  }
+  if (!passwordInput.value) {
+    alert('empty value alert');
+  return;
+  }
+  try {
+      const response = await fetch('/api/password', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `${apiKey}`
+          },
+          body: JSON.stringify({ password: passwordInput.value })
+      });
+      if (!response.ok) throw new Error('Failed to update password');
+      alert('Password updated successfully');
+  } catch (error) {
+      console.error('Error updating password:', error);
+  }
+}
+
 async function signup(){
   try {
     const response = await fetch('/api/signup', {
@@ -159,7 +305,7 @@ async function signup(){
       const data = await response.json();
       localStorage.setItem('apiKey', data.api_key); 
       localStorage.setItem('username', data.name);
-      localStorage.setItem('password', data.password);
+      // localStorage.setItem('password', data.password);
       //debug
       console.log("signup feedback:", "name:", data.name, "api:", data.api_key, "password", data.password)
       navigateTo("/profile");
@@ -170,15 +316,6 @@ async function signup(){
     console.error('Error during signup', error);
   }
 }
-
-function loginfailedornot(){
-  document.querySelector('.failed').style.display = 'none';
-  const loginfailed = localStorage.getItem('loginfailedornot');
-  if (loginfailed == "failed"){
-    document.querySelector('.failed').style.display = 'block';
-  }
-}
-
 
 async function login(username, password) {
   //debug
@@ -208,8 +345,167 @@ async function login(username, password) {
   }
 }
 
-function createanewroom(){
+async function createanewroom(){
+  //debug
+  console.log("Create a new room")
+  apiKey = localStorage.getItem('apiKey')
+  try {
+    const response = await fetch('/api/roomcreation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `${apiKey}`
+      },
+    });
+    if (response.ok) {
+      // If login is successful
+      const data = await response.json();
+      console.log("Room created successfully:", data.id, "Name:", data.name);
+    } else {
+      throw new Error(`API call failed: ${response.status}`);
+    }
+  } catch (error) {
+    console.error("Failed to create a new room:", error);
+  }
+  FetchAndUpdateRooms();
+}
 
+async function FetchAndUpdateRooms(){
+  try {
+    console.log(`Fetch room list!`)
+    const response = await fetch('/api/getrooms', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch rooms: ${response.statusText}`);
+    }
+    const rooms = await response.json();
+    const roomListDiv = document.querySelector('.roomList');
+    const noRoomsDiv = document.querySelector('.noRooms');
+    roomListDiv.innerHTML = '';
+    if (rooms.length > 0) {
+      rooms.forEach(room => {
+        const roomElement = document.createElement('a');
+        roomElement.href = `/room/${room.id}`
+        roomElement.innerHTML = `${room.id}: <strong>${room.name}</strong>`;
+        roomListDiv.appendChild(roomElement);
+      });
+      noRoomsDiv.style.display = 'none';
+    } else {
+      noRoomsDiv.style.display = 'block';
+    }
+  } catch (error) {
+    console.error("Error fetching rooms:", error);
+  }
+}
+
+async function FetchRoomName(){
+  try {
+    apiKey = localStorage.getItem('apiKey')
+    const segments_path = window.location.pathname.split('/');
+    const roomIdIndex = segments_path.findIndex(segments_path => segments_path === 'room') + 1;
+    const roomId = segments_path[roomIdIndex];
+    console.log(`Fetch name for room ${roomId}`)
+    const response = await fetch(`/api/room/${roomId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `${apiKey}`
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const room = await response.json();
+    return {
+      id: room.id,
+      name: room.name
+    };
+  } catch (error) {
+    console.error('Failed to fetch room name:', error);
+  }
+}
+
+async function updateRoomName(id, newname){
+  const apiKey = localStorage.getItem('apiKey');
+  try {
+      const response = await fetch(`/api/room/${id}`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `${apiKey}`
+          },
+          body: JSON.stringify({ new_name: newname })
+      });
+      if (!response.ok) throw new Error('Failed to update room name');
+  } catch (error) {
+      console.error('Error updating room name:', error);
+  }
+}
+
+async function FetchAndUpdateMessages(){
+  try {
+    apiKey = localStorage.getItem('apiKey')
+    const segments_path = window.location.pathname.split('/');
+    const roomIdIndex = segments_path.findIndex(segments_path => segments_path === 'room') + 1;
+    const roomId = segments_path[roomIdIndex];
+    console.log(`Fetch messages for room ${roomId}`)
+    const response = await fetch(`/api/room/${roomId}/messages`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `${apiKey}`
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    const messagesContainer = document.querySelector('.messages');
+    messagesContainer.innerHTML = '';
+    if (data){
+        data.forEach(message => {
+        const messageElement = document.createElement('message');
+        const authorElement = document.createElement('author');
+        authorElement.textContent = message.name;
+        const contentElement = document.createElement('content');
+        contentElement.textContent = message.body;
+        messageElement.appendChild(authorElement);
+        messageElement.appendChild(contentElement);
+        messagesContainer.appendChild(messageElement);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to fetch messages:', error);
+  }
+}
+
+async function sendPost(){
+  try {
+    const commentBox = document.querySelector('.comment_box textarea');
+    const comment = commentBox.value;
+    apiKey = localStorage.getItem('apiKey')
+    const segments_path = window.location.pathname.split('/');
+    const roomIdIndex = segments_path.findIndex(segments_path => segments_path === 'room') + 1;
+    const roomId = segments_path[roomIdIndex];
+    console.log(`send ${comment} to room ${roomId}`)
+    const response = await fetch(`/api/room/${roomId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `${apiKey}`
+      },
+      body: JSON.stringify({ comment: comment })
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to send comment status: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Failed to send comment:', error);
+  }
 }
 
 // TODO:  When displaying a page, update the DOM to show the appropriate content for any element
@@ -218,14 +514,18 @@ function createanewroom(){
 //        of the parent element (and in fact can remove the {{}} from index.html if you want).
 
 function updateContentPlaceholdersUsername() {
-  document.querySelectorAll('.username').forEach(element => {
-    const currentText = element.textContent; // Get the current text of the element
-    const username = localStorage.getItem('username'); 
-    if (username) {
-      const newText = currentText.replace('{{ Username }}', username);
-      element.textContent = newText; // Update the element's text content
-    }
-  });
+  const username = localStorage.getItem('username'); 
+  document.querySelector('.splash .username').textContent = `Welcome back, ${username}`;
+  document.querySelector('.profile .username').textContent = `${username}`;
+  document.querySelector('.room .username').textContent = `${username}`;
+  // document.querySelectorAll('.username').forEach(element => {
+  //   const currentText = element.textContent; // Get the current text of the element
+
+  //   if (username) {
+  //     const newText = currentText.replace('{{ Username }}', username);
+  //     element.textContent = newText; // Update the element's text content
+  //   }
+  // });
 }
 
 // TODO:  Handle clicks on the UI elements.
@@ -245,16 +545,20 @@ function navigateTo(url) {
 
 // let messagePollingInterval;
 
-// function startPollingMessages(roomId) {
-//   messagePollingInterval = setInterval(async () => {
-//     // Replace with your API call to fetch messages
-//     const messages = await fetchMessagesForRoom(roomId);
-//     // Update your messages UI here
-//   }, 100); // Adjust the interval as needed
-// }
+function startRoomlistPolling(){
+  console.log("Roomlist polling start!")
+  roomlistPollingInterval = setInterval(() => {
+    FetchAndUpdateRooms();
+  }, 5000); //check every 5000ms
+  return roomlistPollingInterval
+}
 
-// function stopPollingMessages() {
-//   clearInterval(messagePollingInterval);
-// }
+function startMessagePolling() {
+  console.log("Message polling start!")
+  messagePollingInterval = setInterval(() => {
+    FetchAndUpdateMessages()
+  }, 100); //check every 100ms
+  return messagePollingInterval
+}
 
 // On page load, show the appropriate page and hide the others
